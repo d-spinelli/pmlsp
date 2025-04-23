@@ -65,24 +65,27 @@ predict.me.pmlsprobit<- function(mod, variables=NULL, delta.method=T) {
       return(me.factor)
   }
   f <- abind::abind(me.numeric$Indiv,me.factor$Indiv, along=3)
-  me.total <- cbind(me.numeric$Total,me.factor$Total)
-  me.direct <- cbind(me.numeric$Direct,me.factor$Direct)
-  me.indirect <- cbind(me.numeric$Indirect,me.factor$Indirect)
+
+  me.tot <- cbind(me.numeric$Total,me.factor$Total)
+  attr(me.tot,'gradient') <- do.call(c, list(attr(me.numeric$Total,'gradient'), attr(me.factor$Total,'gradient')))
+  me.dir <- cbind(me.numeric$Direct,me.factor$Direct)
+  me.ind <- cbind(me.numeric$Indirect,me.factor$Indirect)
  if (delta.method) {
+   attr(me.tot,'gradient') <- do.call(c, list(attr(me.numeric$Total,'gradient'), attr(me.factor$Total,'gradient')))
+   attr(me.dir,'gradient') <- do.call(c, list(attr(me.numeric$Direct,'gradient'), attr(me.factor$Direct,'gradient')))
+   attr(me.ind,'gradient') <- do.call(c, list(attr(me.numeric$Indirect,'gradient'), attr(me.factor$Indirect,'gradient')))
     attr(f, 'se') <- abind::abind(attr(me.numeric$Indiv,'se'),
                                   attr(me.factor$Indiv,'se'), along=3 )
-    attr(me.total, 'se') <- cbind(attr(me.numeric$Total,'se'),
+    attr(me.tot, 'se') <- cbind(attr(me.numeric$Total,'se'),
                                   attr(me.factor$Total,'se'))
-    attr(me.direct, 'se') <- cbind(attr(me.numeric$Direct,'se'),
+    attr(me.dir, 'se') <- cbind(attr(me.numeric$Direct,'se'),
                                    attr(me.factor$Direct,'se'))
-    attr(me.indirect, 'se') <- cbind(attr(me.numeric$Indirect,'se'),
+    attr(me.ind, 'se') <- cbind(attr(me.numeric$Indirect,'se'),
                                      attr(me.factor$Indirect,'se'))
 
 
   }
-  list(
-    #Indiv=f,
-     Direct=me.direct, Indirect=me.indirect, Total=me.total)
+  list(Direct=me.dir, Indirect=me.ind, Total=me.tot)
 }
 
 ############# predict xb
@@ -208,7 +211,8 @@ predict.me.factor.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F)
     }
 
   }
- dimnames(f)[1] <- dimnames(f)[1] <- dimnames(mod$model[[1]])[[1]]
+ # browser()
+# dimnames(f)[1] <- dimnames(f)[1] <- dimnames(mod$model[[1]])[[1]]
   me.direct <- apply(f,3,diag)
   me.total <- apply(f,3,rowSums)
   me.indirect <- (me.total - me.direct)/(nobs-1)
@@ -435,9 +439,6 @@ ape <- function(mod,variables=NULL){
   pe <- predict(mod, 'me',variables, delta.method = T)
   pe$Indiv <- NULL
   ape <- lapply(pe, colMeans)
-
-  grad <- attr(pe$Direct,'gradient')
-  simplify2array(lapply(grad, colMeans))
   g <- lapply(pe,
               function(x) {
                 simplify2array(lapply(attr(x,'gradient'), colMeans))
