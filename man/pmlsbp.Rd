@@ -9,23 +9,24 @@
 \title{pmlsbp: Fitting Spatial Probit Models}
 \usage{
 pmlsbp(formula,data, model="SAR", grouping=2, W=NULL,
- zero.policy =spatialreg::get.ZeroPolicyOption(), M=NULL, formula_xlag=NULL,
- W2=NULL, y=NULL, X=NULL, method_inv="chol", start=NULL, subset=NULL,
- na.action=na.fail,qu=Inf,
- mvtnorm_control=list(M=25e3, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
- finalHessian=TRUE, method="bfgsr",print.level=2, vce.type=c("asy") ,
- Conley=list(coords=NULL,LM=2),nBoot=1e3 , ...)
+zero.policy =spatialreg::get.ZeroPolicyOption(),
+M=NULL, formula_xlag=NULL, W2=NULL,  method_inv="solve",
+start=NULL, subset=NULL, na.action=na.fail,qu=Inf, iterlim=1000,
+mvtnorm_control=list(M=1e4, sim_type="qmc" , tol = .Machine$double.eps, fast = FALSE),
+finalHessian=ifelse( method=="bhhh",method,TRUE), method="bhhh",print.level=2,
+vce.type='asy' ,  Conley=list(coords=NULL,LM=2),nBoot=1e3 , spectral=F,
+tol.solve= .Machine$double.eps, version=0, ...)
 
-\method{summary}{pmlsprobit}(object, eigentol = 1e-12, ...)
+\method{summary}{pmlsprobit}(object, ...)
 
-\method{vcov}{pmlsprobit}(x)
+\method{vcov}{pmlsprobit}(object, ...)
 
-\method{coef}{pmlsprobit}(x)
+\method{coef}{pmlsprobit}(object, ...)
 
 \method{print}{pmlsprobit}(x, digits = max(3, getOption("digits") - 3), ...)
 }
 \arguments{
-\item{formula}{an object of class "formula": a symbolic description of the model to be fit. The details of model specification are given for lm()}
+\item{formula}{an object of class "formula": a symbolic description of the model to be fit.}
 
 \item{data}{an optional data frame containing the variables in the model. By default the variables are taken from the environment which the function is called.}
 
@@ -45,7 +46,7 @@ in \code{\link[spatialreg]{GMerrorsar}})}
 \item{M}{a listw object created for example by \code{nb2listw} to be used
 for the model with spatial autoregressive disturbances. This is relevant only if \code{model="SARAR"}.}
 
-\item{formula_xlag}{an object of class "formula": a symbolic description of the variables to be spatially lagged}
+\item{formula_xlag}{an object of class "formula": a symbolic description of the covariates to be spatially lagged.}
 
 \item{W2}{a listw object created for example by \code{nb2listw} to be used
 to create the spatial weight matrix to multiply the covariates. This is relevant only if \code{formula_xlag} is not \code{NULL}.}
@@ -59,15 +60,17 @@ to create the spatial weight matrix to multiply the covariates. This is relevant
 
 \item{na.action}{a function (default \code{na.fail}), can also be \code{na.omit} or \code{na.exclude}
 with consequences for residuals and fitted values - in these cases the weights
-list will be subsetted to remove NAs in the data. It may be necessary to set
+list will be subset to remove NAs in the data. It may be necessary to set
 \code{zero.policy} to TRUE because this subsetting may create no-neighbour observations.
 Note that only weights lists created without using the \code{glist} argument to nb2listw may be subsetted.}
 
 \item{qu}{an integer to be used only if \code{method_inv="fast"}}
 
+\item{iterlim}{an intenger. Maximum number of iterations to be used by \code{maxLik}}
+
 \item{mvtnorm_control}{an optional object of class \code{"list"} that includes the controls for
 the calculation of the multivariate normal probabilities.  The list members should include
-\code{M}, \code{rmtol} and \code{fast} (see \code{\link[mvtnorm]{lmpvnorm}}) and
+\code{M}, \code{rmtol} and \code{fast} (see \code{\link[mvtnorm]{lpmvnorm}}) and
 \code{simtype}, either \code{"mc"} for Monte-Carlo procedure or \code{"qmc"}, quasi-Monte-Carlo procedure)
 The default is \code{list(M=25e3, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE)}}
 
@@ -75,7 +78,7 @@ The default is \code{list(M=25e3, sim_type="mc" , tol = .Machine$double.eps, fas
 (use analytic/numeric Hessian) or \code{"bhhh"/"BHHH"} for information equality approach
 (see \code{\link[maxLik]{maxLik}}).}
 
-\item{method}{maximisation method to be used by \code{maxLik}. The default is \code{method="bfgsr"}
+\item{method}{maximisation method to be used by \code{maxLik}. The default is \code{method="bhhh"}
 Broyden-Fletcher-Goldfarb-Shanno as implemented in R. See also the same option in (see \code{\link[maxLik]{maxLik}}).}
 
 \item{print.level}{Integer, debugging information. Larger number prints more details (see \code{\link[maxLik]{maxLik}}).}
@@ -93,7 +96,19 @@ The default is \code{list(coords=NULL,LM=2)}}
 \item{nBoot}{an integer, the number of bootstrap samples to be used for vce.type="bootstrap".
 It is relevant only if \code{vce.type="bootstrap"}.}
 
-\item{...}{}
+\item{spectral}{a boolean. If \code{spectral=TRUE} uses the standardization of the W matrix based on the spectral decomposition}
+
+\item{tol.solve}{the tolerance to be used by \code{solve} when inverting matrices. The default is \code{.Machine$double.eps}}
+
+\item{version}{an integer that affects the calculation only if the number of observations is even and \code{grouping=2}. If \code{version=0} the bivariate normal integrals are calculated analytically instead of being calculated using \code{mvtnorm}.The default is \code{method="bhhh"}.}
+
+\item{...}{additional arguments to be passed to \code{maxLik}}
+
+\item{object}{a \code{"pmlsprobit"} object}
+
+\item{x}{a \code{"pmlsprobit"} object}
+
+\item{digits}{integer, used for number formatting the decimal digits}
 }
 \value{
 \code{pmlsbp} returns an object of class \code{"pmlsprobit"}.
@@ -140,6 +155,22 @@ where \eqn{\epsilon \sim N(0,\sigma^2)} and \eqn{y=1(y^*>0)}. The SAR model assu
 \item \code{print(pmlsprobit)}: prints the call and the coefficient estimates of a \code{"pmlsprobit"} object
 
 }}
+\examples{
+# load the data
+data(oldcol, package="spdep")
+
+# create binary response variable
+COL.OLD$y<-as.numeric(COL.OLD$CRIME>35)
+
+# prepare the spatial weight matrix
+listw <- spdep::nb2listw(COL.nb, style="W")
+
+set.seed(857489)
+
+# fit a SAR model
+mod<-pmlsbp (y~HOVAL+INC, COL.OLD, W=listw, model = 'SAR',print.level = 2,
+              grouping = 7, na.action=na.omit, spectral = TRUE, iterlim=1e5)
+}
 \references{
 Bille', A. G., & Leorato, S. (2020). Partial ML estimation for spatial autoregressive nonlinear probit models with autoregressive disturbances. Econometric Reviews, 39(5), 437-475.
 }

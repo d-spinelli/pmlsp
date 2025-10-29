@@ -7,13 +7,14 @@
 #' }
 #' where \eqn{\epsilon \sim N(0,\sigma^2)} and \eqn{y=1(y^*>0)}. The SAR model assumes \eqn{\lambda=0}
 #' @usage pmlsbp(formula,data, model="SAR", grouping=2, W=NULL,
-#'  zero.policy =spatialreg::get.ZeroPolicyOption(), M=NULL, formula_xlag=NULL,
-#'  W2=NULL, y=NULL, X=NULL, method_inv="chol", start=NULL, subset=NULL,
-#'  na.action=na.fail,qu=Inf,
-#'  mvtnorm_control=list(M=25e3, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
-#'  finalHessian=TRUE, method="bfgsr",print.level=2, vce.type=c("asy") ,
-#'  Conley=list(coords=NULL,LM=2),nBoot=1e3 , ...)
-#' @param formula an object of class "formula": a symbolic description of the model to be fit. The details of model specification are given for lm()
+#' zero.policy =spatialreg::get.ZeroPolicyOption(),
+#' M=NULL, formula_xlag=NULL, W2=NULL,  method_inv="solve",
+#' start=NULL, subset=NULL, na.action=na.fail,qu=Inf, iterlim=1000,
+#' mvtnorm_control=list(M=1e4, sim_type="qmc" , tol = .Machine$double.eps, fast = FALSE),
+#' finalHessian=ifelse( method=="bhhh",method,TRUE), method="bhhh",print.level=2,
+#' vce.type='asy' ,  Conley=list(coords=NULL,LM=2),nBoot=1e3 , spectral=F,
+#' tol.solve= .Machine$double.eps, version=0, ...)
+#' @param formula an object of class "formula": a symbolic description of the model to be fit.
 #' @param data an optional data frame containing the variables in the model. By default the variables are taken from the environment which the function is called.
 #' @param model a character (\code{"SAR"} or \code{"SARAR"}) defining the model to be estimated. The default is \code{"SAR"}.
 #' @param grouping an integer defining the number of observations to include in the tuples
@@ -26,7 +27,7 @@
 #' in \code{\link[spatialreg]{GMerrorsar}})
 #' @param M a listw object created for example by \code{nb2listw} to be used
 #' for the model with spatial autoregressive disturbances. This is relevant only if \code{model="SARAR"}.
-#' @param formula_xlag an object of class "formula": a symbolic description of the variables to be spatially lagged
+#' @param formula_xlag an object of class "formula": a symbolic description of the covariates to be spatially lagged.
 #' @param W2 a listw object created for example by \code{nb2listw} to be used
 #' to create the spatial weight matrix to multiply the covariates. This is relevant only if \code{formula_xlag} is not \code{NULL}.
 #' @param method_inv a character for setting the inversion of \eqn{I-\rho*W}, either \code{"solve"}, \code{"chol"} or \code{"fast"}.
@@ -35,19 +36,19 @@
 #' @param subset an optional vector specifying a subset of observations to be used for fitting
 #' @param na.action a function (default \code{na.fail}), can also be \code{na.omit} or \code{na.exclude}
 #' with consequences for residuals and fitted values - in these cases the weights
-#' list will be subsetted to remove NAs in the data. It may be necessary to set
+#' list will be subset to remove NAs in the data. It may be necessary to set
 #' \code{zero.policy} to TRUE because this subsetting may create no-neighbour observations.
 #' Note that only weights lists created without using the \code{glist} argument to nb2listw may be subsetted.
 #' @param qu an integer to be used only if \code{method_inv="fast"}
 #' @param mvtnorm_control an optional object of class \code{"list"} that includes the controls for
 #' the calculation of the multivariate normal probabilities.  The list members should include
-#' \code{M}, \code{rmtol} and \code{fast} (see \code{\link[mvtnorm]{lmpvnorm}}) and
+#' \code{M}, \code{rmtol} and \code{fast} (see \code{\link[mvtnorm]{lpmvnorm}}) and
 #' \code{simtype}, either \code{"mc"} for Monte-Carlo procedure or \code{"qmc"}, quasi-Monte-Carlo procedure)
 #' The default is \code{list(M=25e3, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE)}
 #' @param finalHessian how (and if) to calculate the final Hessian. Either \code{FALSE} (not calculate), \code{TRUE}
 #' (use analytic/numeric Hessian) or \code{"bhhh"/"BHHH"} for information equality approach
 #'  (see \code{\link[maxLik]{maxLik}}).
-#' @param method maximisation method to be used by \code{maxLik}. The default is \code{method="bfgsr"}
+#' @param method maximisation method to be used by \code{maxLik}. The default is \code{method="bhhh"}
 #' Broyden-Fletcher-Goldfarb-Shanno as implemented in R. See also the same option in (see \code{\link[maxLik]{maxLik}}).
 #' @param print.level Integer, debugging information. Larger number prints more details (see \code{\link[maxLik]{maxLik}}).
 #' @param vce.type  an optional character specifying the type of variance covariance
@@ -60,7 +61,11 @@
 #' The default is \code{list(coords=NULL,LM=2)}
 #' @param nBoot an integer, the number of bootstrap samples to be used for vce.type="bootstrap".
 #' It is relevant only if \code{vce.type="bootstrap"}.
-#' @param ...
+#' @param version an integer that affects the calculation only if the number of observations is even and \code{grouping=2}. If \code{version=0} the bivariate normal integrals are calculated analytically instead of being calculated using \code{mvtnorm}.The default is \code{method="bhhh"}.
+#' @param spectral a boolean. If \code{spectral=TRUE} uses the standardization of the W matrix based on the spectral decomposition
+#' @param iterlim an intenger. Maximum number of iterations to be used by \code{maxLik}
+#' @param tol.solve the tolerance to be used by \code{solve} when inverting matrices. The default is \code{.Machine$double.eps}
+#' @param ... additional arguments to be passed to \code{maxLik}
 #'
 #' @return \code{pmlsbp} returns an object of class \code{"pmlsprobit"}.
 #' The function \code{summary} is used to obtain and print a summary of the results.
@@ -89,11 +94,25 @@
 #' @export
 #' @references Bille', A. G., & Leorato, S. (2020). Partial ML estimation for spatial autoregressive nonlinear probit models with autoregressive disturbances. Econometric Reviews, 39(5), 437-475.
 #' @examples
+#' # load the data
+#' data(oldcol, package="spdep")
+#'
+#' # create binary response variable
+#' COL.OLD$y<-as.numeric(COL.OLD$CRIME>35)
+#'
+#' # prepare the spatial weight matrix
+#' listw <- spdep::nb2listw(COL.nb, style="W")
+#'
+#' set.seed(857489)
+#'
+#' # fit a SAR model
+#' mod<-pmlsbp (y~HOVAL+INC, COL.OLD, W=listw, model = 'SAR',print.level = 2,
+#'               grouping = 7, na.action=na.omit, spectral = TRUE, iterlim=1e5)
 pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =spatialreg::get.ZeroPolicyOption(),
                          M=NULL, formula_xlag=NULL, W2=NULL,  method_inv="solve",
                          start=NULL, subset=NULL, na.action=na.fail,qu=Inf, iterlim=1000,
-                         mvtnorm_control=list(M=25e3, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
-                         finalHessian=TRUE, method="bhhh",print.level=2, vce.type='asy' , Conley=list(coords=NULL,LM=2),nBoot=1e3 , spectral=F, tol.solve= .Machine$double.eps, version=0, ...) {
+                         mvtnorm_control=list(M=1e4, sim_type="qmc" , tol = .Machine$double.eps, fast = FALSE),
+                         finalHessian=ifelse( method=="bhhh",method,TRUE), method="bhhh",print.level=2, vce.type='asy' , Conley=list(coords=NULL,LM=2),nBoot=1e3 , spectral=F, tol.solve= .Machine$double.eps, version=0, ...) {
   match.arg(model, c("SAR","SARAR"), several.ok = FALSE)
   match.arg(method_inv, c("chol","solve","fast"), several.ok = FALSE)
   stopifnot(is.numeric(qu))
@@ -103,17 +122,24 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
 
 
   if (is.null(mvtnorm_control$M))
-    mvtnorm_control$M <- 25e3
+    mvtnorm_control$M <- 1e4
   if (is.null(mvtnorm_control$tol))
     mvtnorm_control$tol <- .Machine$double.eps
   if (is.null(mvtnorm_control$fast))
     mvtnorm_control$fast <- FALSE
   if (is.null(mvtnorm_control$sim_type))
-    mvtnorm_control$sim_type <- "mc"
+    mvtnorm_control$sim_type <- "qmc"
   stopifnot(mvtnorm_control$sim_type %in% c("mc","qmc"))
 
   #serve per chiamare model.frame con relative opzioni, senza generare errori
   call <- match.call()
+  defaults  <- formals(sys.function())
+
+  for (nm in names(defaults)) {
+    if (is.null(call[[nm]]) & !is.null(defaults[[nm]])) {
+      call[[nm]] <- defaults[[nm]]
+    }
+  }
   mmf <- match.call(expand.dots = FALSE)
   mmf$na.action <- na.action
   mmf$subset <- subset
@@ -149,7 +175,7 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
   stopifnot(length(unique(y))==2)
   y <- as.integer(as.logical(y))
   if (!all(y %in% c(0,1))) {
-    stop('spatial_probit failed to convert the response variable into (0,1) values,
+    stop('failed to convert the response variable into (0,1) values,
          please check the response variable')
   }
   X <- stats::model.matrix(mt, mf)
@@ -198,8 +224,10 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
   }
 
   if (!is.null(formula_xlag)) {
-    if ( is.null(W2) )
+    if ( is.null(W2) ) {
       W2 <- W
+      styleW2 <- styleW
+    }
     else {
       if (!inherits(W2,"matrix") & !inherits(W2,"listw"))
       stop("W2 must be a matrix or a listw")
@@ -207,7 +235,7 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
        if (!any(W2$style==c("W","B","C")))
         stop("the style of W2 must be W or B")
       styleW2 <-  W2$style
-      W2 <- subset(W2, !(1:length(W2$neighbours) %in% c(attr(mf, "na.action"), which(!subset))))
+      W2 <- subset(W2, !(1:length(W2$neighbours) %in% c(attr(mf, "na.action"), which(!subset))),zero.policy = zero.policy)
       W2  <- spdep::listw2mat(W2)
     } else   {
       W2 <- subset(W2, !(1:dim(W2)[2] %in% c(attr(mf, "na.action"), which(!subset))))
@@ -295,13 +323,13 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
    optimizer.call$method_inv <- quote(method_inv)
    optimizer.call$groups <- quote(groups)
    optimizer.call$mvtnorm_control <-  quote(mvtnorm_control)
+
    if (model!="SAR")
      optimizer.call$M <- quote(M)
    return <- eval(optimizer.call)
-   # browser()
+
 
    return$rho <- to_natural(tail(return$estimate,1), eig$W )
-  ## return(return)
    if (method=="bobyqa") {
      return$code<- return$ierr
      return$estimate <- return$par
@@ -370,10 +398,11 @@ if (method=='bobyqa') {
       V <- G%*%invH%*%J%*%invH%*%t(G)
     }     ## M, LM e tau?
   if ("bootstrap" %in% vce.type) { #bootstrap qui
+    xb <- attributes(return$maximum)$f$Inv_rho%*%Xall%*%return$beta
     eta <- t(mvtnorm::rmvnorm(nBoot,sigma=attr(obFun, "f")$Sigma_rho))
     ystar <- t(tcrossprod(rep(1, ncol(eta)), xb) ) + eta
     ystar <- ifelse(ystar>0,1,0)
-    bootstrap.call <- maxlik.call
+    bootstrap.call <- optimizer.call
     bootstrap.call$start <- quote(return$estimate)
     bootstrap.call$print.level <- quote(0)
     boot_estimate <- matrix(NA, nrow=nBoot, ncol=length(return$estimate))
@@ -432,7 +461,7 @@ to_tilde <- function(x,eig) {
 
 #' @describeIn pmlsbp computes and returns a list of summary statistics of the fitted spatial probit model
 #' @export
-summary.pmlsprobit <- function(object, eigentol=1e-12,... ) {
+summary.pmlsprobit <- function(object, ... ) {
   ## object      object of class "pmlsprobit"
   ##
   ## RESULTS:
@@ -467,8 +496,7 @@ summary.pmlsprobit <- function(object, eigentol=1e-12,... ) {
 }
 
 #' @export
-print.summary.pmlsprobit <- function( x,
-                                          digits = max( 3L, getOption("digits") - 3L ), ... ) {
+print.summary.pmlsprobit <- function( x, digits = max( 3L, getOption("digits") - 3L ), ... ) {
    cat("Partial Maximum Likelihood estimation\n")
   cat(x$model," model\n")
   cat("Partial Log-Likelihood=", x$loglik, "\n")
@@ -478,27 +506,31 @@ print.summary.pmlsprobit <- function( x,
 }
 
 #' @describeIn pmlsbp returns the variance covariance matrix of a \code{"pmlsprobit"} object
+#' @param object a \code{"pmlsprobit"} object
 #' @export
-vcov.pmlsprobit <- function(x) {
-  V<-x$vcov
-  colnames(V) <- rownames(V) <- names(x$estimate)
+vcov.pmlsprobit <- function(object,...) {
+  V<-object$vcov
+  colnames(V) <- rownames(V) <- names(object$estimate)
   V
 }
 
 #' @describeIn pmlsbp returns the coefficients estimate from a \code{"pmlsprobit"} object
+#' @param object a \code{"pmlsprobit"} object
 #' @export
-coef.pmlsprobit <- function(x) {
-  x$estimate
+coef.pmlsprobit <- function(object,...) {
+  object$estimate
 }
 
 #' @describeIn pmlsbp prints the call and the coefficient estimates of a \code{"pmlsprobit"} object
+#' @param x a \code{"pmlsprobit"} object
+#' @param digits integer, used for number formatting the decimal digits
 #' @export
 print.pmlsprobit<-function(x, digits = max(3, getOption("digits") - 3), ...) {
   cat("\nCall:\n", paste(deparse(x$call), sep = "\n",
                          collapse = "\n"), "\n\n", sep = "")
-  if (length(coef(x))) {
+  if (length(coef.pmlsprobit(x))) {
     cat(paste0("Coefficients (",x$model.type," model) :\n"))
-    print.default(format(coef(x), digits = digits), print.gap = 2L,
+    print.default(format(coef.pmlsprobit(x), digits = digits), print.gap = 2L,
                   quote = FALSE)
   }
   else cat("No coefficients\n")

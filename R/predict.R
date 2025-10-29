@@ -1,5 +1,6 @@
 #' Predicted values based on pmlsprobit object
-#'
+#' @title Predict method for pmlsprobit objects
+#' @name predict.pmlsprobit
 #' @param object a \code{"pmlsprobit"} object
 #' @param type \code{"prob"} for the probability \eqn{P(Y_i=1)} or \code{"me"}
 #' for the direct, indirect and total average marginal effect for each observation
@@ -10,11 +11,31 @@
 #' This option should be used only if the model contains non-linear terms in the specification \eqn{X \beta}.
 #' @param delta.method a boolean. If \code{TRUE} the standard errors of the predictions are calculated.
 #' It is valid only if \code{type="me"}
+#' @param ... additional arguments
 #'
-#' @return
+#' @return A numeric vector with predicted values.
 #' @export
 #'
 #' @examples
+#' # load the data
+#' data(oldcol, package="spdep")
+#'
+#' # create binary response variable
+#' COL.OLD$y<-as.numeric(COL.OLD$CRIME>35)
+#'
+#' # prepare the spatial weight matrix
+#' listw <- spdep::nb2listw(COL.nb, style="W")
+#'
+#' set.seed(857489)
+#'
+#' # fit a SAR model
+#' mod<-pmlsbp (y~HOVAL+INC, COL.OLD, W=listw, model = 'SAR',print.level = 2,
+#'              mvtnorm_control=list(M=25e2, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
+#'              grouping = 7, na.action=na.omit, spectral = TRUE, iterlim=1e5, tol.solve = 1e-300)
+#'
+#' # estimate the average partial effects
+#' prob <- predict(mod)
+#' head(prob)
 predict.pmlsprobit<- function(object,
                                  type='prob',
                                  newdata=NULL, variables=NULL,delta.method=F,...) {
@@ -22,17 +43,18 @@ predict.pmlsprobit<- function(object,
     stop("'predict.pmlsprobit' called on a non-'pmlsprobit' object")
 stopifnot(type %in% c('prob','response','margins','xb','me','mfx','p'))
 if (type %in% c('prob','response','p'))
-  ret <-  predict.prob.pmlsprobit(object, newdata)[,1]
+  ret <-  predict_prob_pmlsprobit(object, newdata)[,1]
 if (type=='xb')
-  ret <- predict.xb.pmlsprobit(object, newdata )[,1]
+  ret <- predict_xb_pmlsprobit(object, newdata )[,1]
 if (type %in% c('me','margins','mfx')) {
-ret <- predict.me.pmlsprobit(object, variables = variables, delta.method=delta.method)
+ret <- predict_me_pmlsprobit(object, variables = variables, delta.method=delta.method)
 class(ret) <- "pe.pmlsprobit"
 }
   ret
-  }
+}
 
-predict.me.pmlsprobit<- function(mod, variables=NULL, delta.method=T) {
+
+predict_me_pmlsprobit<- function(mod, variables=NULL, delta.method=T) {
   variables.factor <- names(which(attr(mod$terms,"dataClasses")[-1]=="factor"))
   variables.numeric <- names(which(attr(mod$terms,"dataClasses")[-1]=="numeric"))
   passthru.factors <- passthru.numeric <- FALSE
@@ -55,19 +77,18 @@ predict.me.pmlsprobit<- function(mod, variables=NULL, delta.method=T) {
     stop('the specified variables were not used to estimate the model')
   me.numeric <- me.factor <- NULL
   if (!passthru.numeric) {
-    me.numeric <- predict.me.numeric.pmlsprobit.v2(mod, variables.numeric, delta.method)
+    me.numeric <- predict_me_numeric_pmlsprobit_v2(mod, variables.numeric, delta.method)
     if (passthru.factors)
       return(me.numeric)
   }
   if (!passthru.factors) {
-    me.factor <- predict.me.factor.pmlsprobit.v2(mod, variables.factor, delta.method )
+    me.factor <- predict_me_factor_pmlsprobit.v2(mod, variables.factor, delta.method )
     if (passthru.numeric)
       return(me.factor)
   }
   f <- abind::abind(me.numeric$Indiv,me.factor$Indiv, along=3)
 
   me.tot <- cbind(me.numeric$Total,me.factor$Total)
-  attr(me.tot,'gradient') <- do.call(c, list(attr(me.numeric$Total,'gradient'), attr(me.factor$Total,'gradient')))
   me.dir <- cbind(me.numeric$Direct,me.factor$Direct)
   me.ind <- cbind(me.numeric$Indirect,me.factor$Indirect)
  if (delta.method) {
@@ -89,7 +110,7 @@ predict.me.pmlsprobit<- function(mod, variables=NULL, delta.method=T) {
 }
 
 ############# predict xb
-predict.xb.pmlsprobit<- function(mod, newdata=NULL, inv_rho=T) {
+predict_xb_pmlsprobit<- function(mod, newdata=NULL, inv_rho=T) {
   #sigma <- sqrt(diag(mod$f$Sigma_rho))
   if (is.null(newdata)) {
     X <- model.matrix(mod$terms, mod$model$mf)
@@ -116,8 +137,8 @@ dimnames(xb)[1] <- dimnames(X)[1]
 xb
 }
 
-predict.prob.pmlsprobit<- function(mod, newdata=NULL) {
-  xb <- predict.xb.pmlsprobit(mod, newdata)
+predict_prob_pmlsprobit<- function(mod, newdata=NULL) {
+  xb <- predict_xb_pmlsprobit(mod, newdata)
   sigma <- sqrt(diag(mod$f$Sigma_rho))
   p <- pnorm(xb/ sigma)
   p
@@ -125,7 +146,7 @@ predict.prob.pmlsprobit<- function(mod, newdata=NULL) {
 
 
 ####################### FACTOR VARIABLES ########################
-predict.me.factor.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F) {
+predict_me_factor_pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F) {
    factor.vars <- which(attr(mod$terms,"dataClasses")[-1]=="factor")
   if (!is.null(variables)) {
     stopifnot( all(is.character(variables)) )
@@ -178,16 +199,16 @@ predict.me.factor.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F)
           X1 <- cbind(X1, Xlag1)
           X0 <- cbind(X0, Xlag0)
         }
-        f[i,,j] <- predict.prob.pmlsprobit(mod, df1)-predict.prob.pmlsprobit(mod, df0)
+        f[i,,j] <- predict_prob_pmlsprobit(mod, df1)-predict_prob_pmlsprobit(mod, df0)
         if (delta.method) {
 
-          z1 <- predict.xb.pmlsprobit(mod,df1)
-          z0 <- predict.xb.pmlsprobit(mod,df0)
+          z1 <- predict_xb_pmlsprobit(mod,df1)
+          z0 <- predict_xb_pmlsprobit(mod,df0)
 
           gradd[i,,] <-  (sweep((invA%*%X1),1,dnorm(z1)/sigma,"*") -  sweep((invA%*%X0),1,dnorm(z0)/sigma,"*"))
 
-          xb1 <- predict.xb.pmlsprobit(mod, df1,inv_rho=F)
-          xb0 <- predict.xb.pmlsprobit(mod, df0,inv_rho=F)
+          xb1 <- predict_xb_pmlsprobit(mod, df1,inv_rho=F)
+          xb0 <- predict_xb_pmlsprobit(mod, df0,inv_rho=F)
 
           grad.rho[i,] <- dnorm(z1)/sigma*(invA%*%mod$W%*%invA%*%xb1 - 0.5*sigma^(-2)*diag(dSigma.drho)*invA%*%xb1) -
             dnorm(z0)/sigma*(invA%*%mod$W%*%invA%*%xb0 - 0.5*sigma^(-2)*diag(dSigma.drho)*invA%*%xb0)
@@ -222,7 +243,6 @@ predict.me.factor.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F)
     grad.dir <- lapply(grad, function(x) { apply(x, 2,diag)})
     grad.total <- lapply(grad, function(x) { apply(x, 2,rowSums)})
     grad.indirect <-  lapply(grad, function(x) { apply(x, 2,rowSums) -  apply(x, 2,diag)})
-
     se.dir <- sqrt(sapply(grad.dir, function(x) {apply(x ,1, function(g) {t(g)%*%mod$vcov%*%(g)}  )} ))
     se.indirect <- sqrt(sapply(grad.total, function(x) {apply(x ,1, function(g) {t(g)%*%mod$vcov%*%(g)/((nobs-1)^2)}  )} ))
     se.total <- sqrt(sapply(grad.indirect, function(x) {apply(x ,1, function(g) {t(g)%*%mod$vcov%*%(g)/(nobs^2)}  )} ))
@@ -249,10 +269,10 @@ predict.me.factor.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F)
 
 
 ##############################
-predict.me.numeric.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=T) {
+predict_me_numeric_pmlsprobit_v2 <- function(mod, variables=NULL, delta.method=T) {
   sigma <- sqrt(diag(mod$f$Sigma_rho))
-  xb <- predict.xb.pmlsprobit(mod,inv_rho=F)
-  z <- predict.xb.pmlsprobit(mod) /sigma
+  xb <- predict_xb_pmlsprobit(mod,inv_rho=F)
+  z <- predict_xb_pmlsprobit(mod) /sigma
   invA  <- mod$f$Inv_rho
   me <- dnorm(z)/sigma
   nobs <- length(z)
@@ -265,7 +285,8 @@ predict.me.numeric.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=T
     if (mod$slx) {
       numeric.vars.slx <- names(which(attr(mod$terms.xlag,"dataClasses")[-1]=="numeric"))
       Xlag <- model.matrix(mod$terms.xlag, mod$model$mf.xlag)
-      names.Xlag <- colnames(Xlag)[colnames(Xlag) %in% numeric.vars.slx]
+      names.Xlag <-colnames(Xlag)[colnames(Xlag) %in% numeric.vars.slx]
+      #names.Xlag <- paste0("W2*",colnames(Xlag)[colnames(Xlag) %in% numeric.vars.slx])
       all.names <- unique(c(all.names,names.Xlag))
       all.beta <- rep(0, 2*length(all.names))
       names(all.beta) <- c(all.names, paste0("W2*",all.names))
@@ -287,7 +308,7 @@ predict.me.numeric.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=T
       dq.dbeta <- numDeriv::jacobian(
         function(beta, model=mod){
           model$beta <- beta
-          predict.xb.pmlsprobit(model, inv_rho=F)}
+          predict_xb_pmlsprobit(model, inv_rho=F)}
         , mod$beta,model=mod)
       #d2q.dxdbeta <- array(0, dim=c(nobs, length(mod$beta),nobs),dimnames = list(NULL, names(mod$beta),NULL))
     }
@@ -297,6 +318,7 @@ predict.me.numeric.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=T
   mfx <- array(dim=c(nobs,3, length(all.names) ),dimnames = list(dimnames(mod$model[[1]])[[1]],c("Direct","Indirect","Total"),all.names) )
   grad <- list()
   for (i in all.names){  ##looping over all the variables for which mfx are calculated
+    # i <- 'PLUMB'
     if (is.null(variables)) {
       dq.dx <- all.beta[i]*diag(nobs)
       if (mod$slx)
@@ -306,7 +328,7 @@ predict.me.numeric.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=T
         function(x, index,model=mod){
           newdata <- model$model$mf
           newdata[,index] <- x
-          predict.xb.pmlsprobit(model, newdata=newdata, inv_rho=F)},
+          predict_xb_pmlsprobit(model, newdata=newdata, inv_rho=F)},
         mod$model$mf[,i], index=which( colnames(mod$model$mf)==i))
 
     }
@@ -322,9 +344,14 @@ predict.me.numeric.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=T
 
         d2q.dxdbeta <- array(0, dim=c(nobs, length(mod$beta),nobs),dimnames = list(NULL, names(mod$beta),NULL))
         for (r in 1:nobs) {
-          d2q.dxdbeta[r,i,r] <- 1
-          if (mod$slx && (paste0('W2*',i) %in% names(mod$beta)) )
-            d2q.dxdbeta[r,paste0('W2*',i),] <- t(mod$W2[r,])
+          if (mod$slx) {
+            if (paste0('W2*',i) %in% names(mod$beta))
+              d2q.dxdbeta[r,paste0('W2*',i),] <- t(mod$W2[r,])
+            if (i %in% names(mod$beta))
+              d2q.dxdbeta[r,i,r] <- 1
+          }
+          else
+            d2q.dxdbeta[r,i,r] <- 1
         }
         d2q.dxdbeta <- lapply(seq(nobs), function(x) t(d2q.dxdbeta[x,,])  )
       }
@@ -335,27 +362,13 @@ predict.me.numeric.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=T
           beta <- tail(param,length(model$beta))
           model$beta <- beta
           model$model$mf[,which.var] <- x
-          predict.xb.pmlsprobit(model, newdata=model$model$mf, inv_rho=F)[which.obs]
+          predict_xb_pmlsprobit(model, newdata=model$model$mf, inv_rho=F)[which.obs]
         }
-        # if (!parallel){
         d2q.dxdbeta <- lapply(seq(nobs), function(x) {
           numDeriv::hessian(xbeta.bidi, c(mod$model$mf[,i], mod$beta), which.var = which( colnames(mod$model$mf)==i) , which.obs=x)[1:nobs,-(1:nobs)]
         } )
-        # } else {
-        # clust <-   makeCluster(detectCores()-1)
-        # clusterExport(clust, ls(environment()), envir=environment()  )
-        # d2q.dxdbeta <- parallel::parLapply(clust,seq(nobs), function(x) {
-        #   numDeriv::hessian(function(param, model=mod, which.var=1, which.obs=1) {
-        #     x <- head(param, nrow(model$model$mf))
-        #     beta <- tail(param,length(model$beta))
-        #     model$beta <- beta
-        #     model$model$mf[,which.var] <- x
-        #     predict.xb.pmlsprobit(model, newdata=model$model$mf, inv_rho=F)[which.obs]
-        #   }
-        #   , c(mod$model$mf[,i], mod$beta), which.var = which( colnames(mod$model$mf)==i) , which.obs=x)[1:nobs,-(1:nobs)]
-        # } )
-        # }
-      }#
+
+      }
       Ad2q  <- lapply(d2q.dxdbeta, function(x) t(invA%*%x) )
       Ad2q <- aperm(simplify2array(Ad2q),perm=c(3,1,2))
       Ad2q <-  sweep(Ad2q , 1,dnorm(z)/(sigma^2),'*')
@@ -420,10 +433,6 @@ predict.me.numeric.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=T
   ret
 }
 
-
-
-
-
 #' Average partial (i.e., marginal) total, direct and indirect effects from a pmlsprobit object
 #'
 #' @param mod 	Object of class inheriting from "pmlsbp"
@@ -431,12 +440,30 @@ predict.me.numeric.pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=T
 #' which the marginal effects should be calculated using numeric derivatives.  It is valid only if \code{type="me"}.
 #' This option should be used only if the model contains non-linear terms in the specification \eqn{X \beta}
 #'
-#' @return
+#' @returns A numeric vector with predicted values.
 #' @export
 #'
 #' @examples
+#' # load the data
+#' data(oldcol, package="spdep")
+#'
+#' # create binary response variable
+#' COL.OLD$y<-as.numeric(COL.OLD$CRIME>35)
+#'
+#' # prepare the spatial weight matrix
+#' listw <- spdep::nb2listw(COL.nb, style="W")
+#'
+#' set.seed(857489)
+#'
+#' # fit a SAR model
+#' mod<-pmlsbp (y~HOVAL+INC, COL.OLD, W=listw, model = 'SAR',print.level = 2,
+#'              mvtnorm_control=list(M=25e2, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
+#'              grouping = 7, na.action=na.omit, spectral = TRUE, iterlim=1e5, tol.solve = 1e-300)
+#'
+#' # estimate the average partial effects
+#' ape(mod)
 ape <- function(mod,variables=NULL){
-  pe <- predict(mod, 'me',variables, delta.method = T)
+  pe <- predict.pmlsprobit(mod, 'me',variables, delta.method = T)
   pe$Indiv <- NULL
   ape <- lapply(pe, colMeans)
   g <- lapply(pe,
@@ -459,10 +486,10 @@ ape <- function(mod,variables=NULL){
 
 
 #' @export
-print.ape.pmlsprobit<-function(ape, digits = max(3, getOption("digits") - 3)) {
-  for (i in 1:length(ape)) {
-    cat("Average", paste( names(ape)[[i]], "Partial Effects\n"))
-    stats::printCoefmat(ape[[i]], digits=digits, signif.legend = (i==length(ape)))
+print.ape.pmlsprobit<-function(x, digits = max(3, getOption("digits") - 3),...) {
+  for (i in 1:length(x)) {
+    cat("Average", paste( names(x)[[i]], "Partial Effects\n"))
+    stats::printCoefmat(x[[i]], digits=digits, signif.legend = (i==length(x)))
     cat("\n\n")
     }
 }
@@ -470,6 +497,6 @@ print.ape.pmlsprobit<-function(ape, digits = max(3, getOption("digits") - 3)) {
 
 #' @describeIn Predicted values based on pmlsprobit object
 #' @export
-print.pe.pmlsprobit<-function(pe, digits = max(3, getOption("digits") - 3)) {
-lapply(pe, print.default, digits=digits)
+print.pe.pmlsprobit<-function(x, digits = max(3, getOption("digits") - 3),...) {
+lapply(x, print.default, digits=digits)
 }

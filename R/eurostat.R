@@ -1,0 +1,17 @@
+#' @title Eurostat employment data
+#' @description The \code{eurostat} data frame has 312 row and 10 variables. Unit of analysis: 312 regions in Europe. Additionally, the \code{eurostat.nb} includes the neighbour list based on a consider a k-nearest neighbour approach with k = 11
+#' @usage data(eurostat)
+#' @format A data frame with 312 rows and 10 variables:
+#' \describe{
+#'   \item{\code{nuts_id}}{Region identifier}
+#'   \item{\code{country_id}}{Country identfier}
+#'   \item{\code{employment}}{Employement rate in percentage}
+#'   \item{\code{gdp}}{GDP per capita}
+#'   \item{\code{isced_02}}{percentage of residents aged 25-64 with secondary school achievement or lower}
+#'   \item{\code{isced_34}}{percentage of residents aged 25-64 with high school achievement or lower}
+#'   \item{\code{isced_58}}{percentage of residents aged 25-64 with bachelor degree or higher}
+#'   \item{\code{long}}{Longitude}
+#'   \item{\code{lat}}{Latitude}
+#'}
+#' @source <https://ec.europa.eu/eurostat/data/database>
+"eurostat"

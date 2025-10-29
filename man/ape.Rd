@@ -13,6 +13,29 @@ ape(mod, variables = NULL)
 which the marginal effects should be calculated using numeric derivatives.  It is valid only if \code{type="me"}.
 This option should be used only if the model contains non-linear terms in the specification \eqn{X \beta}}
 }
+\value{
+A numeric vector with predicted values.
+}
 \description{
 Average partial (i.e., marginal) total, direct and indirect effects from a pmlsprobit object
+}
+\examples{
+# load the data
+data(oldcol, package="spdep")
+
+# create binary response variable
+COL.OLD$y<-as.numeric(COL.OLD$CRIME>35)
+
+# prepare the spatial weight matrix
+listw <- spdep::nb2listw(COL.nb, style="W")
+
+set.seed(857489)
+
+# fit a SAR model
+mod<-pmlsbp (y~HOVAL+INC, COL.OLD, W=listw, model = 'SAR',print.level = 2,
+             mvtnorm_control=list(M=25e2, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
+             grouping = 7, na.action=na.omit, spectral = TRUE, iterlim=1e5, tol.solve = 1e-300)
+
+# estimate the average partial effects
+ape(mod)
 }

@@ -139,7 +139,7 @@ f_rho_sar3 <- function (rho_tilde,W,X,eig,qu,Method_inv) {
     Sigma_rho=diag(n)
     dotSigma_rho=W+t(W)}
   else {
-    Inv_rho <- invIrW(x=W,rho=rho,method='solve',feasible=T)
+    Inv_rho <- spatialreg::invIrW(x=W,rho=rho,method='solve',feasible=T)
     X_rho <- Inv_rho%*%X
     dotX_rho <- W%*%X_rho
     dotX_rho <- Inv_rho%*%X_rho #equazione 16 in proof (fondo pag 15)
@@ -186,7 +186,7 @@ f_rho_sar3 <- function (rho_tilde,W,X,eig,qu,Method_inv) {
       Sigma_rho=diag(n)
       dotSigma_rho=W+t(W)}
     else {
-      Inv_rho      <- invIrW(x=W,rho=rho,method='solve',feasible=T)
+      Inv_rho      <- spatialreg::invIrW(x=W,rho=rho,method='solve',feasible=T)
       X_rho        <- Inv_rho%*%X
       Sigma_rho    <- tcrossprod(Inv_rho)                                   #directly approximate the inverse
       dotX_rho     <- W%*%X_rho
@@ -233,23 +233,14 @@ f_rho_sar3 <- function (rho_tilde,W,X,eig,qu,Method_inv) {
 }
 
 prob.v0 <- function (k0,X_rho_i_beta,X_rho_j_beta,sigma_ii,sigma_rho_ij) {
-  #ARRIVANO DA PROOF OF THEOREM 3.1
-  #forse posso evitare di calcolare pmvnorm due volte
-  #
-  p_01 <-max(1e-135,pmvnorm(lower=c(-Inf,-X_rho_j_beta),upper=c(-X_rho_i_beta,Inf),sigma=sigma_rho_ij))
-  #  if (p_01 <= 1e-135) {p_01 = 1e-135}
+  p_01 <-max(1e-135 , mvtnorm::pmvnorm(lower=c(-Inf,-X_rho_j_beta),upper=c(-X_rho_i_beta,Inf),sigma=sigma_rho_ij))
 
   p_00 <- max(1e-135,(1-pnorm(X_rho_i_beta/sigma_ii)) - p_01)
-  #  if (p_00 <= 1e-135) {p_00 = 1e-135}
 
-  p_11 <- max(1e-135,pmvnorm(lower=c(-X_rho_i_beta,-X_rho_j_beta),upper=c(Inf,Inf),sigma=sigma_rho_ij))
-  #  if (p_11 <= 1e-135) {p_11 = 1e-135}
+  p_11 <- max(1e-135, mvtnorm::pmvnorm(lower=c(-X_rho_i_beta,-X_rho_j_beta),upper=c(Inf,Inf),sigma=sigma_rho_ij))
 
   p_10 <- max(1e-135,pnorm(X_rho_i_beta/sigma_ii) - p_11)
-  #  if (p_10 <= 1e-135) {p_10 = 1e-135}
 
   p <- c(p_00,p_01,p_10,p_11)
-  #p = p/sum(p)
-  #print(p)
   return(p[k0])
 }

@@ -104,7 +104,7 @@ logLIK_SAR <- function(theta,y,W,X,eig,qu=Inf,method_inv="solve", groups,
 
   X_rho_list <- lapply(split( f_rho$X_rho, groups$X), function(x) matrix(x, ncol=ncol(X)) )
   xb_list <- split(xb, groups$y)
-  assign("theta", theta, envir = globalenv())
+  #assign("theta", theta, envir = globalenv())
   Sigma_list <- lapply(split(f_rho$Sigma_rho, groups$Sigma)[-1],
                        function(x) matrix(x, ncol=sqrt(length(x))))
   dotSigma_list <- lapply(split(f_rho$dotSigma_rho, groups$Sigma)[-1],
@@ -131,7 +131,7 @@ logLIK_g_SAR <- function(xb,Sigma,y,  X_rho ,dotXb_rho, dotSigma, simw,
   upper[y==0] <- -xb[y==0]
   lower[y==1] <- -xb[y==1]
   Sigma <- .5*(Sigma  + t(Sigma) )
-  assign("Sigma", Sigma, envir = globalenv())
+  #assign("Sigma", Sigma, envir = globalenv())
   # if (!matrixcalc::is.positive.definite(Sigma, tol=1e-8)) {
   #   #Sigma <- Matrix::nearPD(Sigma, ensureSymmetry = T)$mat
   #   assign("my_result", Sigma, envir = globalenv())

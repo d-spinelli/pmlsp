@@ -2,7 +2,7 @@
 % Please edit documentation in R/predict.R
 \name{predict.pmlsprobit}
 \alias{predict.pmlsprobit}
-\title{Predicted values based on pmlsprobit object}
+\title{Predict method for pmlsprobit objects}
 \usage{
 \method{predict}{pmlsprobit}(
   object,
@@ -28,7 +28,33 @@ This option should be used only if the model contains non-linear terms in the sp
 
 \item{delta.method}{a boolean. If \code{TRUE} the standard errors of the predictions are calculated.
 It is valid only if \code{type="me"}}
+
+\item{...}{additional arguments}
+}
+\value{
+A numeric vector with predicted values.
 }
 \description{
 Predicted values based on pmlsprobit object
+}
+\examples{
+# load the data
+data(oldcol, package="spdep")
+
+# create binary response variable
+COL.OLD$y<-as.numeric(COL.OLD$CRIME>35)
+
+# prepare the spatial weight matrix
+listw <- spdep::nb2listw(COL.nb, style="W")
+
+set.seed(857489)
+
+# fit a SAR model
+mod<-pmlsbp (y~HOVAL+INC, COL.OLD, W=listw, model = 'SAR',print.level = 2,
+             mvtnorm_control=list(M=25e2, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
+             grouping = 7, na.action=na.omit, spectral = TRUE, iterlim=1e5, tol.solve = 1e-300)
+
+# estimate the average partial effects
+prob <- predict(mod)
+head(prob)
 }
