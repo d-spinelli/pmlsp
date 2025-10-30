@@ -30,3 +30,5 @@ Maintainer: Daniele Spinelli <daniele.spinelli@unimib.it>
 Depends: 
     R (>= 3.5)
 LazyData: true
+URL: https://github.com/d-spinelli/pmlsp
+BugReports: https://github.com/d-spinelli/pmlsp/issues
