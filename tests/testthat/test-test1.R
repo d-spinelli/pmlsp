@@ -25,23 +25,35 @@ head(mfx$Indirect)
 head(mfx$Total)
 ape(mod1)
 
-mod1a <- pmlsbp (equation, COL.OLD, W=listw, model = 'SAR',
+mod2 <- pmlsbp (equation, COL.OLD, W=listw, model = 'SAR',
                  mvtnorm_control=list(M=1e3, sim_type="qmc" , tol = .Machine$double.eps, fast = FALSE),
                  print.level = 2,grouping=7)
-summary(mod1a)
-
-mod1b <- pmlsbp (equation, COL.OLD, W=listw, model = 'SAR',formula_xlag = xlag,
-                 print.level = 2,grouping=7)
-summary(mod1b)
-
-mod2 <- pmlsbp (equation, COL.OLD, W=listw,M=listw, model = 'SARAR',print.level = 2,
-                mvtnorm_control=list(M=1e3, sim_type="qmc" , tol = .Machine$double.eps, fast = FALSE),
-                grouping=7,method='bhhh')
 summary(mod2)
-xlag <-  y~PLUMB
-mod2a <- pmlsbp (equation, COL.OLD, W=listw,M=listw, model = 'SAR',print.level = 2,
-                 formula_xlag = xlag, iterlim=500,
-                 mvtnorm_control=list(M=1e3, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
-                 grouping=7,method='bhhh')
-summary(mod2a)
+
+
+data("eurostat")
+set.seed(12345)
+
+eurostat$bin.emp <- ifelse(eurostat$employment >= 70, 1, 0)
+eurostat$gdp.std <- as.numeric(scale(eurostat$gdp))
+
+mod3 <- pmlsbp(bin.emp ~ 0 + gdp.std + isced_02+isced_34+isced_58 ,
+               eurostat,
+               W=eurostat.nb,
+               zero.policy=T, M=eurostat.nb,
+               grouping=2, model='SARAR')
+summary(mod3)
+ape(mod3)
+
+
+eqn<- bin.emp ~ 0 + gdp.std + isced_02+isced_34+isced_58
+mod4 <- pmlsbp(eqn  ,
+               eurostat,
+               W=eurostat.nb,
+               mvtnorm_control=list(M=1e3, sim_type="qmc" , tol = .Machine$double.eps, fast = FALSE),
+               zero.policy=T, W2=eurostat.nb,formula_xlag =bin.emp ~ 0 + gdp.std + isced_02+isced_34  ,
+               grouping=6, model='SAR')
+summary(mod4)
+ape(mod4)
+head(predict(mod4, 'prob'))
 

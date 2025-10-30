@@ -151,15 +151,12 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
   gav <- mf
   gav.formula <- all.vars(formula)
 
-
-
   if (!is.null(formula_xlag)) {
     mf.xlag <- mf
     mf.xlag$formula <- formula_xlag
     gav.formula <- c(gav.formula,all.vars(formula_xlag))
     mf.xlag <- eval(mf.xlag, parent.frame())
     mt.xlag <- attr(mf.xlag, "terms")
-
   }
 
   mf <- eval(mf, parent.frame())
@@ -272,7 +269,7 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
   }
   else Xall <- X
   if (is.null(start)) {
-    start <- suppressWarnings(glm(y~Xall-1, family = binomial(link = "probit"))$coefficients)
+    start <- suppressWarnings(glm(y~Xall+0, family = binomial(link = "probit"))$coefficients)
     names(start) <- colnames(Xall)
 
     start <- c(start,to_tilde(0, eig$W)[1])

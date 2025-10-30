@@ -8,4 +8,12 @@
 \description{
 Estimate spatial autoregressive nonlinear probit models with autoregressive disturbances. The package allows the estimation of SAR and SARAR probit models using partial maximum likelihood estimation. Estimation and inference regarding marginal effects is also possible.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/d-spinelli/pmlsp}
+  \item Report bugs at \url{https://github.com/d-spinelli/pmlsp/issues}
+}
+
+}
 \keyword{internal}

@@ -3,6 +3,7 @@
 \docType{data}
 \name{eurostat}
 \alias{eurostat}
+\alias{eurostat.nb}
 \title{Eurostat employment data}
 \format{
 A data frame with 312 rows and 10 variables:

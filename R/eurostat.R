@@ -1,4 +1,5 @@
 #' @title Eurostat employment data
+#' @aliases eurostat.nb
 #' @description The \code{eurostat} data frame has 312 row and 10 variables. Unit of analysis: 312 regions in Europe. Additionally, the \code{eurostat.nb} includes the neighbour list based on a consider a k-nearest neighbour approach with k = 11
 #' @usage data(eurostat)
 #' @format A data frame with 312 rows and 10 variables:
