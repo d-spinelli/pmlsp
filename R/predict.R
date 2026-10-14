@@ -1,44 +1,61 @@
-#' Predicted values based on pmlsprobit object
-#' @title Predict method for pmlsprobit objects
-#' @name predict.pmlsprobit
-#' @param object a \code{"pmlsprobit"} object
-#' @param type \code{"prob"} for the probability \eqn{P(Y_i=1)} or \code{"me"}
-#' for the direct, indirect and total average marginal effect for each observation
-#' @param newdata 	An optional data frame in which to look for variables with which to predict.
-#' If omitted, the fitted values are used.
-#' @param variables a string including the variable names of the covariates for
-#' which the marginal effects should be calculated using numeric derivatives.  It is valid only if \code{type="me"}.
-#' This option should be used only if the model contains non-linear terms in the specification \eqn{X \beta}.
-#' @param delta.method a boolean. If \code{TRUE} the standard errors of the predictions are calculated.
-#' It is valid only if \code{type="me"}
-#' @param ... additional arguments
+#' Predicted Values and Marginal Effects for Spatial Probit Models
 #'
-#' @return A numeric vector with predicted values.
-#' @export
+#' @description
+#' Computes predicted probabilities or average marginal effects from an object
+#' of class \code{"pmlsprobit"}.
+#'
+#' @param object An object of class \code{"pmlsprobit"}.
+#' @param type Character string specifying the type of prediction.
+#'   Use \code{"prob"} for predicted probabilities \eqn{P(Y_i = 1)}, or
+#'   \code{"me"} for direct, indirect, and total average marginal effects.
+#' @param newdata Optional data frame containing variables used for prediction.
+#'   If omitted, the fitted values are used.
+#' @param variables Character vector of covariate names for which marginal
+#'   effects are computed using numerical derivatives. Only used if
+#'   \code{type = "me"}.
+#' @param delta.method Logical; if \code{TRUE}, standard errors of the predictions
+#'   are computed. Only used if \code{type = "me"}.
+#' @param ... Additional arguments (currently unused).
+#'
+#' @return
+#' If \code{type = "prob"}, a numeric vector of predicted probabilities.
+#' If \code{type = "me"}, a list of matrices containing individual direct,
+#' indirect, and total marginal effects for each covariate.
+#'
+#' @seealso
+#' Partial maximum likelihood estimation is implemented in
+#' \code{\link{pmlsbp}}.
 #'
 #' @examples
-#' # load the data
-#' data(oldcol, package="spdep")
+#' \donttest{
+#' data(oldcol, package = "spdep")
+#' dat <- COL.OLD
+#' dat$y <- as.numeric(dat$CRIME > 35)
 #'
-#' # create binary response variable
-#' COL.OLD$y<-as.numeric(COL.OLD$CRIME>35)
-#'
-#' # prepare the spatial weight matrix
-#' listw <- spdep::nb2listw(COL.nb, style="W")
+#' listw <- spdep::nb2listw(COL.nb, style = "W")
 #'
 #' set.seed(857489)
+#' mod <- pmlsbp(
+#'   y ~ HOVAL + INC, data = dat, W = listw,
+#'   model = "SAR", grouping = 7,
+#'   mvtnorm_control = list(
+#'     M = 25e2, sim_type = "mc",
+#'     tol = .Machine$double.eps, fast = FALSE
+#'   ),
+#'   na.action = na.omit, spectral = TRUE,
+#'   iterlim = 1e5
+#' )
 #'
-#' # fit a SAR model
-#' mod<-pmlsbp (y~HOVAL+INC, COL.OLD, W=listw, model = 'SAR',print.level = 2,
-#'              mvtnorm_control=list(M=25e2, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
-#'              grouping = 7, na.action=na.omit, spectral = TRUE, iterlim=1e5, tol.solve = 1e-300)
-#'
-#' # estimate the average partial effects
 #' prob <- predict(mod)
 #' head(prob)
+#' }
+#'
+#' @method predict pmlsprobit
+#' @export
+
 predict.pmlsprobit<- function(object,
                                  type='prob',
-                                 newdata=NULL, variables=NULL,delta.method=F,...) {
+                                 newdata=NULL, variables=NULL,delta.method=FALSE,...) {
   if(!inherits(object, "pmlsprobit"))
     stop("'predict.pmlsprobit' called on a non-'pmlsprobit' object")
 stopifnot(type %in% c('prob','response','margins','xb','me','mfx','p'))
@@ -54,7 +71,7 @@ class(ret) <- "pe.pmlsprobit"
 }
 
 
-predict_me_pmlsprobit<- function(mod, variables=NULL, delta.method=T) {
+predict_me_pmlsprobit<- function(mod, variables=NULL, delta.method=TRUE) {
   variables.factor <- names(which(attr(mod$terms,"dataClasses")[-1]=="factor"))
   variables.numeric <- names(which(attr(mod$terms,"dataClasses")[-1]=="numeric"))
   passthru.factors <- passthru.numeric <- FALSE
@@ -117,7 +134,7 @@ predict_xb_pmlsprobit<- function(mod, newdata=NULL, inv_rho=T) {
     if (mod$slx) {
       Xlag <-   model.matrix(mod$terms.xlag, mod$model$mf.xlag)
       colnames(Xlag) <-  paste0("W2*",colnames(Xlag))
-      Xlag <- mod$W2%*%Xlag[,colnames(Xlag) %in% names(mod$beta), drop=F]
+      Xlag <- mod$W2%*%Xlag[,colnames(Xlag) %in% names(mod$beta), drop=FALSE]
       X <- cbind(X,Xlag)
     }
   } else {
@@ -125,7 +142,7 @@ predict_xb_pmlsprobit<- function(mod, newdata=NULL, inv_rho=T) {
    if (mod$slx) {
      Xlag <-  model.matrix(mod$terms.xlag, model.frame(mod$terms.xlag, newdata))
      colnames(Xlag) <-  paste0("W2*",colnames(Xlag))
-     Xlag <- mod$W2%*%Xlag[,colnames(Xlag) %in% names(mod$beta), drop=F]
+     Xlag <- mod$W2%*%Xlag[,colnames(Xlag) %in% names(mod$beta), drop=FALSE]
      X <- cbind(X,Xlag)
    }
      }
@@ -146,7 +163,7 @@ predict_prob_pmlsprobit<- function(mod, newdata=NULL) {
 
 
 ####################### FACTOR VARIABLES ########################
-predict_me_factor_pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F) {
+predict_me_factor_pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=FALSE) {
    factor.vars <- which(attr(mod$terms,"dataClasses")[-1]=="factor")
   if (!is.null(variables)) {
     stopifnot( all(is.character(variables)) )
@@ -193,8 +210,8 @@ predict_me_factor_pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F)
           df0lag[i,fv] <- levels(mod$model$mf[,fv])[1]
           Xlag1 <- model.matrix(mod$terms.xlag, df1lag)
           Xlag0 <- model.matrix(mod$terms.xlag, df0lag)
-          Xlag1 <- mod$W2 %*% Xlag1[,-which(colnames(Xlag1)=="(Intercept)"), drop=F]
-          Xlag0 <- mod$W2 %*% Xlag0[,-which(colnames(Xlag0)=="(Intercept)"), drop=F]
+          Xlag1 <- mod$W2 %*% Xlag1[,-which(colnames(Xlag1)=="(Intercept)"), drop=FALSE]
+          Xlag0 <- mod$W2 %*% Xlag0[,-which(colnames(Xlag0)=="(Intercept)"), drop=FALSE]
           colnames(Xlag1) <- colnames(Xlag0) <- paste0("W2*",colnames(Xlag1))
           X1 <- cbind(X1, Xlag1)
           X0 <- cbind(X0, Xlag0)
@@ -207,8 +224,8 @@ predict_me_factor_pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F)
 
           gradd[i,,] <-  (sweep((invA%*%X1),1,dnorm(z1)/sigma,"*") -  sweep((invA%*%X0),1,dnorm(z0)/sigma,"*"))
 
-          xb1 <- predict_xb_pmlsprobit(mod, df1,inv_rho=F)
-          xb0 <- predict_xb_pmlsprobit(mod, df0,inv_rho=F)
+          xb1 <- predict_xb_pmlsprobit(mod, df1,inv_rho=FALSE)
+          xb0 <- predict_xb_pmlsprobit(mod, df0,inv_rho=FALSE)
 
           grad.rho[i,] <- dnorm(z1)/sigma*(invA%*%mod$W%*%invA%*%xb1 - 0.5*sigma^(-2)*diag(dSigma.drho)*invA%*%xb1) -
             dnorm(z0)/sigma*(invA%*%mod$W%*%invA%*%xb0 - 0.5*sigma^(-2)*diag(dSigma.drho)*invA%*%xb0)
@@ -232,8 +249,7 @@ predict_me_factor_pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F)
     }
 
   }
- # browser()
-# dimnames(f)[1] <- dimnames(f)[1] <- dimnames(mod$model[[1]])[[1]]
+
   me.direct <- apply(f,3,diag)
   me.total <- apply(f,3,rowSums)
   me.indirect <- (me.total - me.direct)/(nobs-1)
@@ -269,9 +285,9 @@ predict_me_factor_pmlsprobit.v2 <- function(mod, variables=NULL, delta.method=F)
 
 
 ##############################
-predict_me_numeric_pmlsprobit_v2 <- function(mod, variables=NULL, delta.method=T) {
+predict_me_numeric_pmlsprobit_v2 <- function(mod, variables=NULL, delta.method=TRUE) {
   sigma <- sqrt(diag(mod$f$Sigma_rho))
-  xb <- predict_xb_pmlsprobit(mod,inv_rho=F)
+  xb <- predict_xb_pmlsprobit(mod,inv_rho=FALSE)
   z <- predict_xb_pmlsprobit(mod) /sigma
   invA  <- mod$f$Inv_rho
   me <- dnorm(z)/sigma
@@ -293,7 +309,7 @@ predict_me_numeric_pmlsprobit_v2 <- function(mod, variables=NULL, delta.method=T
       for (i in names(mod$beta)[names(mod$beta)!="(Intercept)"] )
         all.beta[i] <- mod$beta[i]
       colnames(Xlag) <-  paste0("W2*",colnames(Xlag))
-      Xlag <- mod$W2%*%Xlag[,colnames(Xlag) %in% names(mod$beta), drop=F]
+      Xlag <- mod$W2%*%Xlag[,colnames(Xlag) %in% names(mod$beta), drop=FALSE]
       X <- cbind(X,Xlag)
     }
     if (delta.method) {
@@ -310,7 +326,6 @@ predict_me_numeric_pmlsprobit_v2 <- function(mod, variables=NULL, delta.method=T
           model$beta <- beta
           predict_xb_pmlsprobit(model, inv_rho=F)}
         , mod$beta,model=mod)
-      #d2q.dxdbeta <- array(0, dim=c(nobs, length(mod$beta),nobs),dimnames = list(NULL, names(mod$beta),NULL))
     }
 
   }
@@ -318,7 +333,7 @@ predict_me_numeric_pmlsprobit_v2 <- function(mod, variables=NULL, delta.method=T
   mfx <- array(dim=c(nobs,3, length(all.names) ),dimnames = list(dimnames(mod$model[[1]])[[1]],c("Direct","Indirect","Total"),all.names) )
   grad <- list()
   for (i in all.names){  ##looping over all the variables for which mfx are calculated
-    # i <- 'PLUMB'
+
     if (is.null(variables)) {
       dq.dx <- all.beta[i]*diag(nobs)
       if (mod$slx)
@@ -402,9 +417,9 @@ predict_me_numeric_pmlsprobit_v2 <- function(mod, variables=NULL, delta.method=T
     }
   }
 
-  me.direct <-  matrix(mfx[,"Direct",,drop=F], ncol=length(all.names), dimnames = list(dimnames(mod$model[[1]])[[1]], all.names) )
-  me.total <- matrix(mfx[,"Total",,drop=F]/nobs, ncol=length(all.names), dimnames = list(dimnames(mod$model[[1]])[[1]], all.names) )
-  me.indirect <- matrix(mfx[,"Indirect",,drop=F]/(nobs-1), ncol=length(all.names), dimnames = list(dimnames(mod$model[[1]])[[1]], all.names) )
+  me.direct <-  matrix(mfx[,"Direct",,drop=FALSE], ncol=length(all.names), dimnames = list(dimnames(mod$model[[1]])[[1]], all.names) )
+  me.total <- matrix(mfx[,"Total",,drop=FALSE]/nobs, ncol=length(all.names), dimnames = list(dimnames(mod$model[[1]])[[1]], all.names) )
+  me.indirect <- matrix(mfx[,"Indirect",,drop=FALSE]/(nobs-1), ncol=length(all.names), dimnames = list(dimnames(mod$model[[1]])[[1]], all.names) )
 
     if (delta.method)  {
     grad.dir <- lapply(grad, function(x) { (apply(x, 2,diag))})
@@ -433,35 +448,50 @@ predict_me_numeric_pmlsprobit_v2 <- function(mod, variables=NULL, delta.method=T
   ret
 }
 
-#' Average partial (i.e., marginal) total, direct and indirect effects from a pmlsprobit object
+#' Average Marginal Effects for Spatial Probit Models
 #'
-#' @param mod 	Object of class inheriting from "pmlsbp"
-#' @param variables a string including the variable names of the covariates for
-#' which the marginal effects should be calculated using numeric derivatives.  It is valid only if \code{type="me"}.
-#' This option should be used only if the model contains non-linear terms in the specification \eqn{X \beta}
+#' @description
+#' Computes average direct, indirect, and total marginal effects from an object
+#' of class \code{"pmlsprobit"} using numerical derivatives.
 #'
-#' @returns A numeric vector with predicted values.
-#' @export
+#' @param mod An object of class \code{"pmlsprobit"}.
+#' @param variables Character vector specifying the names of covariates for which
+#'   marginal effects are computed. This option should be used only when the model
+#'   contains nonlinear terms in the specification \eqn{X \beta}.
+#'
+#' @return
+#' A named list with three elements corresponding to the average direct,
+#' indirect, and total marginal effects for each covariate.
+#'
+#' @seealso
+#' Partial maximum likelihood estimation is implemented in
+#' \code{\link{pmlsbp}}.
 #'
 #' @examples
-#' # load the data
-#' data(oldcol, package="spdep")
+#' \donttest{
+#' data(oldcol, package = "spdep")
+#' dat <- COL.OLD
+#' dat$y <- as.numeric(dat$CRIME > 35)
 #'
-#' # create binary response variable
-#' COL.OLD$y<-as.numeric(COL.OLD$CRIME>35)
-#'
-#' # prepare the spatial weight matrix
-#' listw <- spdep::nb2listw(COL.nb, style="W")
+#' listw <- spdep::nb2listw(COL.nb, style = "W")
 #'
 #' set.seed(857489)
+#' mod <- pmlsbp(
+#'   y ~ HOVAL + INC, data = dat, W = listw,
+#'   model = "SAR", grouping = 7,
+#'   mvtnorm_control = list(
+#'     M = 25e2, sim_type = "mc",
+#'     tol = .Machine$double.eps, fast = FALSE
+#'   ),
+#'   na.action = na.omit, spectral = TRUE,
+#'   iterlim = 1e5
+#' )
 #'
-#' # fit a SAR model
-#' mod<-pmlsbp (y~HOVAL+INC, COL.OLD, W=listw, model = 'SAR',print.level = 2,
-#'              mvtnorm_control=list(M=25e2, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE),
-#'              grouping = 7, na.action=na.omit, spectral = TRUE, iterlim=1e5, tol.solve = 1e-300)
-#'
-#' # estimate the average partial effects
 #' ape(mod)
+#' }
+#'
+#' @export
+
 ape <- function(mod,variables=NULL){
   pe <- predict.pmlsprobit(mod, 'me',variables, delta.method = T)
   pe$Indiv <- NULL

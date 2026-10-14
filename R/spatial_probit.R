@@ -1,118 +1,150 @@
-#' pmlsbp: Fitting Spatial Probit Models
-#' @description Estimation of Partial Maximum Likelihood Spatial Autoregressive (SAR) Probit Models and Spatial Autoregressive Probit Models with Autoregressive Disturbances (SARAR).
-#' The model structure for the SARAR model is: \cr
-#' \tabular{c}{
-#' \eqn{y^* = \rho W y + X \beta + W_2 Z \gamma} + u  \cr
-#' \eqn{u = \lambda M u + \epsilon} \cr
-#' }
-#' where \eqn{\epsilon \sim N(0,\sigma^2)} and \eqn{y=1(y^*>0)}. The SAR model assumes \eqn{\lambda=0}
-#' @usage pmlsbp(formula,data, model="SAR", grouping=2, W=NULL,
-#' zero.policy =spatialreg::get.ZeroPolicyOption(),
-#' M=NULL, formula_xlag=NULL, W2=NULL,  method_inv="solve",
-#' start=NULL, subset=NULL, na.action=na.fail,qu=Inf, iterlim=1000,
-#' mvtnorm_control=list(M=1e4, sim_type="qmc" , tol = .Machine$double.eps, fast = FALSE),
-#' finalHessian=ifelse( method=="bhhh",method,TRUE), method="bhhh",print.level=2,
-#' vce.type='asy' ,  Conley=list(coords=NULL,LM=2),nBoot=1e3 , spectral=F,
-#' tol.solve= .Machine$double.eps, version=0, ...)
-#' @param formula an object of class "formula": a symbolic description of the model to be fit.
-#' @param data an optional data frame containing the variables in the model. By default the variables are taken from the environment which the function is called.
-#' @param model a character (\code{"SAR"} or \code{"SARAR"}) defining the model to be estimated. The default is \code{"SAR"}.
-#' @param grouping an integer defining the number of observations to include in the tuples
-#' to be used for estimation, the default is 2.
-#' @param W a listw object created for example by \code{nb2listw}
-#' @param zero.policy default NULL, use global option value; if TRUE assign zero to the lagged
-#' value of zones without neighbours, if FALSE (default) assign NA - causing
-#' \code{pmlsbp} to terminate with an error
-#' (see also \code{\link[spatialreg]{set.ZeroPolicyOption}}) and the same option
-#' in \code{\link[spatialreg]{GMerrorsar}})
-#' @param M a listw object created for example by \code{nb2listw} to be used
-#' for the model with spatial autoregressive disturbances. This is relevant only if \code{model="SARAR"}.
-#' @param formula_xlag an object of class "formula": a symbolic description of the covariates to be spatially lagged.
-#' @param W2 a listw object created for example by \code{nb2listw} to be used
-#' to create the spatial weight matrix to multiply the covariates. This is relevant only if \code{formula_xlag} is not \code{NULL}.
-#' @param method_inv a character for setting the inversion of \eqn{I-\rho*W}, either \code{"solve"}, \code{"chol"} or \code{"fast"}.
-#' \code{"solve"} uses \code{solve}, "chol" performs the inversion of the matrix from its Choleski decomposition (see \code{\link[Matrix]{chol2inv}}), \code{"fast"} uses an approximation that requires option \code{qu}
-#' @param start numeric vector, initial value of parameters.
-#' @param subset an optional vector specifying a subset of observations to be used for fitting
-#' @param na.action a function (default \code{na.fail}), can also be \code{na.omit} or \code{na.exclude}
-#' with consequences for residuals and fitted values - in these cases the weights
-#' list will be subset to remove NAs in the data. It may be necessary to set
-#' \code{zero.policy} to TRUE because this subsetting may create no-neighbour observations.
-#' Note that only weights lists created without using the \code{glist} argument to nb2listw may be subsetted.
-#' @param qu an integer to be used only if \code{method_inv="fast"}
-#' @param mvtnorm_control an optional object of class \code{"list"} that includes the controls for
-#' the calculation of the multivariate normal probabilities.  The list members should include
-#' \code{M}, \code{rmtol} and \code{fast} (see \code{\link[mvtnorm]{lpmvnorm}}) and
-#' \code{simtype}, either \code{"mc"} for Monte-Carlo procedure or \code{"qmc"}, quasi-Monte-Carlo procedure)
-#' The default is \code{list(M=25e3, sim_type="mc" , tol = .Machine$double.eps, fast = FALSE)}
-#' @param finalHessian how (and if) to calculate the final Hessian. Either \code{FALSE} (not calculate), \code{TRUE}
-#' (use analytic/numeric Hessian) or \code{"bhhh"/"BHHH"} for information equality approach
-#'  (see \code{\link[maxLik]{maxLik}}).
-#' @param method maximisation method to be used by \code{maxLik}. The default is \code{method="bhhh"}
-#' Broyden-Fletcher-Goldfarb-Shanno as implemented in R. See also the same option in (see \code{\link[maxLik]{maxLik}}).
-#' @param print.level Integer, debugging information. Larger number prints more details (see \code{\link[maxLik]{maxLik}}).
-#' @param vce.type  an optional character specifying the type of variance covariance
-#' estimation  (VCE) to be performed. It can be either \code{"asy"} for the asymptotic VCE,
-#' \code{"bootstrap"} for bootstrap  VCE or \code{"mConley"} for the modified Conley approach.
-#' The default is "asy".
-#' @param Conley a list with two members, which is relevant only for \code{vce.type="mConley"}.
-#' The first member (\code{coords}) is a matrix with the coordinates of each observation;
-#' the second member (\code{LM}) is the number of neighbors to be used.
-#' The default is \code{list(coords=NULL,LM=2)}
-#' @param nBoot an integer, the number of bootstrap samples to be used for vce.type="bootstrap".
-#' It is relevant only if \code{vce.type="bootstrap"}.
-#' @param version an integer that affects the calculation only if the number of observations is even and \code{grouping=2}. If \code{version=0} the bivariate normal integrals are calculated analytically instead of being calculated using \code{mvtnorm}.The default is \code{method="bhhh"}.
-#' @param spectral a boolean. If \code{spectral=TRUE} uses the standardization of the W matrix based on the spectral decomposition
-#' @param iterlim an intenger. Maximum number of iterations to be used by \code{maxLik}
-#' @param tol.solve the tolerance to be used by \code{solve} when inverting matrices. The default is \code{.Machine$double.eps}
-#' @param ... additional arguments to be passed to \code{maxLik}
+#' Fitting Spatial Probit Models by Partial Maximum Likelihood
 #'
-#' @return \code{pmlsbp} returns an object of class \code{"pmlsprobit"}.
-#' The function \code{summary} is used to obtain and print a summary of the results.
-#' A object of class \code{"pmlsprobit"} is list containing the following components:
-#' \tabular{ll}{
-#' \code{beta} \tab a named vector including the \eqn{\beta} and \eqn{\gamma}, the coefficents attached to the variables resulting from \code{formula} and  \code{formula_xlag} \cr
-#' \code{call} \tab the call \cr
-#' \code{code} \tab \cr
-#' \code{estimate} \tab a named vector of model estimates \cr
-#' \code{f} \tab a list including useful matrices to be used in \code{predict} \cr
-#' \code{maximum} \tab the value of the partial log-likelihood given the data and the model estimates \cr
-#' \code{message} \tab convergence message \cr
-#' \code{model} \tab \cr
-#' \code{model.type} \tab either \code{"SAR"} or  \code{"SARAR"}  \cr
-#' \code{rho} \tab a named scalar for the \eqn{\rho} parameter \cr
-#' \code{slx} \tab \code{TRUE} if the model includes spatially lagged covariates \cr
-#' \code{start} \tab a named vector, the starting values used in estimation \cr
-#' \code{terms} \tab 	the terms object used. \cr
-#' \code{vcov} \tab the variance-covariance matrix of the estimates \cr
-#' \code{W} \tab matrix \eqn{W}  \cr
-#' \code{lambda} \tab a named scalar for parameter \eqn{lambda} (only for SARAR models)  \cr
-#' \code{M} \tab matrix \eqn{M} (only for SARAR models)  \cr
-#' \code{W2} \tab matrix \eqn{W_2} (only if \code{slx=TRUE})  \cr
+#' @description
+#' Fits spatial autoregressive probit models using partial maximum likelihood
+#' as proposed in Bille and Leorato (2020) <doi:10.1080/07474938.2019.1682314>.
+#' Both Spatial Autoregressive (SAR) probit models and Spatial Autoregressive
+#' Probit Models with Autoregressive Disturbances (SARAR) are supported.
+#'
+#' @details
+#' The SARAR model is defined as
+#' \deqn{
+#' y^* = \rho W y + X \beta + W_2 Z \gamma + u
+#' }{
+#' y* = rho W y + X beta + W2 Z gamma + u
 #' }
-
-#' @export
-#' @references Bille', A. G., & Leorato, S. (2020). Partial ML estimation for spatial autoregressive nonlinear probit models with autoregressive disturbances. Econometric Reviews, 39(5), 437-475.
+#' with
+#' \deqn{
+#' u = \lambda M u + \epsilon,
+#' }{
+#' u = lambda M u + epsilon
+#' }
+#' where \eqn{\epsilon \sim N(0,\sigma^2)} and the observed binary outcome is
+#' \eqn{y = 1(y^* > 0)}. The SAR model is obtained by setting \eqn{\lambda = 0}.
+#'
+#' @usage
+#' pmlsbp(
+#'   formula, data, model = "SAR", grouping = 2,
+#'   W = NULL,
+#'   zero.policy = spatialreg::get.ZeroPolicyOption(),
+#'   M = NULL, formula_xlag = NULL, W2 = NULL,
+#'   method_inv = "solve",
+#'   start = NULL, subset = NULL, na.action = na.fail,
+#'   qu = Inf, iterlim = 1000,
+#'   mvtnorm_control = list(M = 1e4, sim_type = "qmc",
+#'                          tol = .Machine$double.eps, fast = FALSE),
+#'   finalHessian = ifelse(method == "bhhh", method, TRUE),
+#'   method = "bhhh", print.level = 2,
+#'   vce.type = "asy",
+#'   Conley = list(coords = NULL, LM = 2),
+#'   nBoot = 1e3, spectral = FALSE,
+#'   verbose = TRUE ,
+#'   tol.solve = .Machine$double.eps,
+#'   version = 0, ...
+#' )
+#'
+#' @param formula An object of class \code{"formula"} specifying the model.
+#' @param data An optional data frame containing the variables in the model.
+#' @param model A character string specifying the model type; either
+#'   \code{"SAR"} or \code{"SARAR"}.
+#' @param grouping An integer defining the number of observations to include
+#'   in the tuples used for estimation.
+#' @param W A spatial weights object of class \code{"listw"}, for example
+#'   created by \code{\link[spdep]{nb2listw}}.
+#' @param zero.policy Logical; if \code{TRUE}, assigns zero to lagged values
+#'   for observations without neighbors.
+#' @param M A spatial weights object of class \code{"listw"} used for the
+#'   disturbance process; relevant only if \code{model = "SARAR"}.
+#' @param formula_xlag An optional \code{"formula"} specifying covariates to be
+#'   spatially lagged.
+#' @param W2 A spatial weights object used to construct spatially lagged
+#'   covariates; relevant only if \code{formula_xlag} is not \code{NULL}.
+#' @param method_inv Character string specifying the method used to invert
+#'   \eqn{I - \rho W}; one of \code{"solve"}, \code{"chol"}, or \code{"fast"}.
+#' @param start Numeric vector of starting values.
+#' @param subset Optional vector specifying a subset of observations.
+#' @param na.action A function specifying how missing values are handled.
+#' @param qu Integer used only if \code{method_inv = "fast"}.
+#' @param mvtnorm_control A list of control parameters for multivariate normal
+#'   probability calculations; see \code{\link[mvtnorm]{lpmvnorm}}.
+#' @param finalHessian Logical or character specifying how the final Hessian
+#'   matrix is computed; see \code{\link[maxLik]{maxLik}}.
+#' @param method Maximization method passed to \code{\link[maxLik]{maxLik}}.
+#' @param print.level Integer controlling the amount of diagnostic output.
+#' @param vce.type Character specifying the variance–covariance estimator;
+#'   one of \code{"asy"}, \code{"bootstrap"}, or \code{"mConley"}.
+#' @param Conley A list specifying options for the modified Conley estimator.
+#' @param nBoot Integer specifying the number of bootstrap replications.
+#' @param spectral Logical; if \code{TRUE}, uses spectral normalization of \eqn{W}.
+#' @param verbose Logical; if \code{TRUE}, diagnostic messages are printed during
+#'   model estimation. The default is \code{TRUE}. Setting \code{verbose = FALSE}
+#'   suppresses intermediate output.
+#' @param iterlim Integer specifying the maximum number of iterations.
+#' @param tol.solve Numeric tolerance used when inverting matrices.
+#' @param version Integer controlling the computation of bivariate normal
+#'   integrals when \code{grouping = 2}.
+#' @param ... Additional arguments passed to \code{\link[maxLik]{maxLik}}.
+#'
+#' @return
+#' An object of class \code{"pmlsprobit"}, which is a list containing:
+#' \describe{
+#'   \item{\code{beta}}{Named vector of regression coefficients.}
+#'   \item{\code{call}}{The matched function call.}
+#'   \item{\code{code}}{Convergence code from \code{maxLik}.}
+#'   \item{\code{estimate}}{Named vector of parameter estimates.}
+#'   \item{\code{f}}{List of matrices used for prediction.}
+#'   \item{\code{maximum}}{Value of the partial log-likelihood.}
+#'   \item{\code{message}}{Convergence message from \code{maxLik}.}
+#'   \item{\code{model}}{Model frame used in estimation.}
+#'   \item{\code{model.type}}{Either \code{"SAR"} or \code{"SARAR"}.}
+#'   \item{\code{rho}}{Estimated spatial autoregressive parameter.}
+#'   \item{\code{slx}}{Logical indicating the presence of spatially lagged covariates.}
+#'   \item{\code{start}}{Starting values used in estimation.}
+#'   \item{\code{terms}}{Terms object.}
+#'   \item{\code{vcov}}{Variance–covariance matrix of the estimates.}
+#'   \item{\code{W}}{Spatial weights matrix \eqn{W}.}
+#'   \item{\code{lambda}}{Estimated disturbance parameter (SARAR only).}
+#'   \item{\code{M}}{Spatial weights matrix \eqn{M} (SARAR only).}
+#'   \item{\code{W2}}{Spatial weights matrix \eqn{W_2} (if \code{slx = TRUE}).}
+#' }
+#'
+#' @seealso
+#' \code{\link{pmlsbp}}, \code{\link[maxLik]{maxLik}}
+#'
+#' @references
+#' Bille', A. G., & Leorato, S. (2020).
+#' Partial ML estimation for spatial autoregressive nonlinear probit models
+#' with autoregressive disturbances.
+#' \emph{Econometric Reviews}, 39(5), 437–475.
+#' \doi{10.1080/07474938.2019.1682314}
+#'
 #' @examples
-#' # load the data
-#' data(oldcol, package="spdep")
+#' \donttest{
+#' data(oldcol, package = "spdep")
+#' dat <- COL.OLD
+#' dat$y <- as.numeric(dat$CRIME > 35)
 #'
-#' # create binary response variable
-#' COL.OLD$y<-as.numeric(COL.OLD$CRIME>35)
-#'
-#' # prepare the spatial weight matrix
-#' listw <- spdep::nb2listw(COL.nb, style="W")
+#' listw <- spdep::nb2listw(COL.nb, style = "W")
 #'
 #' set.seed(857489)
+#' mod <- pmlsbp(
+#'   y ~ HOVAL + INC, data = dat, W = listw,
+#'   model = "SAR", grouping = 7,
+#'   na.action = na.omit, spectral = TRUE,
+#'   iterlim = 1e5
+#' )
+#' }
 #'
-#' # fit a SAR model
-#' mod<-pmlsbp (y~HOVAL+INC, COL.OLD, W=listw, model = 'SAR',print.level = 2,
-#'               grouping = 7, na.action=na.omit, spectral = TRUE, iterlim=1e5)
+#' @export
+
 pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =spatialreg::get.ZeroPolicyOption(),
                          M=NULL, formula_xlag=NULL, W2=NULL,  method_inv="solve",
                          start=NULL, subset=NULL, na.action=na.fail,qu=Inf, iterlim=1000,
                          mvtnorm_control=list(M=1e4, sim_type="qmc" , tol = .Machine$double.eps, fast = FALSE),
-                         finalHessian=ifelse( method=="bhhh",method,TRUE), method="bhhh",print.level=2, vce.type='asy' , Conley=list(coords=NULL,LM=2),nBoot=1e3 , spectral=F, tol.solve= .Machine$double.eps, version=0, ...) {
+                         finalHessian=ifelse( method=="bhhh",method,TRUE),
+                        method="bhhh",print.level=2, vce.type='asy' ,
+                        Conley=list(coords=NULL,LM=2),nBoot=1e3 , spectral=FALSE, verbose=TRUE,
+                        tol.solve= .Machine$double.eps, version=0, ...) {
   match.arg(model, c("SAR","SARAR"), several.ok = FALSE)
   match.arg(method_inv, c("chol","solve","fast"), several.ok = FALSE)
   stopifnot(is.numeric(qu))
@@ -168,7 +200,7 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
     stop("'formula' is an empty model")
   y <- stats::model.response(mf, "any")
   if (is.character(y) | is.factor(y))
-    stop ('y must be a numeric variable')
+    stop ('the response variable must be numeric')
   stopifnot(length(unique(y))==2)
   y <- as.integer(as.logical(y))
   if (!all(y %in% c(0,1))) {
@@ -181,9 +213,9 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
   if (is.null(subset))
     subset <- rep(T, nrow(X))
   if (is.null(W))
-    stop("W is mandatory")
+    stop("argument W is mandatory")
   if (!inherits(W,"matrix") & !inherits(W,"listw"))
-    stop("W must be a matrix or a listw")
+    stop("argument W must be a matrix or a listw")
   if (inherits(W, "listw")) {
     if (!any(W$style==c("W","B","C")))
       stop("the style of W must be W or B")
@@ -331,12 +363,6 @@ pmlsbp <- function(formula,data, model="SAR", grouping=2, W=NULL,zero.policy =sp
      return$code<- return$ierr
      return$estimate <- return$par
    }
-   # if (return$code!=0) {
-   #   cat("----------------------------------------------\n WARNING \n")
-   #   cat(paste0("converge not achieved: ",return$message,"\n"))
-   #   cat("----------------------------------------------\n")
-   #   return(NULL)
-   # }
 
   return$groups <- groups
   return$start <- start
@@ -403,6 +429,7 @@ if (method=='bobyqa') {
     bootstrap.call$start <- quote(return$estimate)
     bootstrap.call$print.level <- quote(0)
     boot_estimate <- matrix(NA, nrow=nBoot, ncol=length(return$estimate))
+    if (verbose) {
     cat("bootstrap iterations\n")
     pb <- txtProgressBar(min = 0, max = nBoot, initial = 0,style = 3)
            for (i in 1:nBoot) {
@@ -412,6 +439,7 @@ if (method=='bobyqa') {
             if (!( "try-error" %in% class(bi)))
              boot_estimate[i,] <- bi$estimate
            }
+    }
     boot_estimate <- na.omit(boot_estimate)
     V <- var(boot_estimate)
     #colnames(V$bootstrap) <- rownames(V$bootstrap) <- names(return$estimate)
@@ -456,21 +484,54 @@ to_tilde <- function(x,eig) {
 
 }
 
-#' @describeIn pmlsbp computes and returns a list of summary statistics of the fitted spatial probit model
+#' Summarizing Partial Maximum Likelihood Spatial Probit Models
+#'
+#' @description
+#' Provides a summary method for objects of class \code{"pmlsprobit"}.
+#'
+#' @param object An object of class \code{"pmlsprobit"}.
+#' @param ... Additional arguments (currently unused).
+#'
+#' @return
+#' An object of class \code{"summary.pmlsprobit"} containing:
+#' \describe{
+#'   \item{\code{estimate}}{Matrix of estimates, standard errors, z-values, and p-values.}
+#'   \item{\code{rho}}{Estimated spatial autoregressive parameter.}
+#'   \item{\code{lambda}}{Estimated spatial error parameter.}
+#'   \item{\code{model.type}}{Type of spatial probit model fitted.}
+#'   \item{\code{loglik}}{Log-likelihood at the optimum.}
+#'   \item{\code{iteration}}{Number of iterations performed.}
+#'   \item{\code{returnCode}}{Optimizer convergence code.}
+#'   \item{\code{returnMessage}}{Message associated with the convergence code.}
+#'   \item{\code{vcov}}{Variance–covariance matrix of the parameter estimates.}
+#' }
+#'
+#' @seealso
+#' Partial maximum likelihood estimation is implemented in
+#' \code{\link{pmlsbp}}.
+#'
+#' @examples
+#' \donttest{
+#' data(oldcol, package = "spdep")
+#' dat <- COL.OLD
+#' dat$y <- as.numeric(dat$CRIME > 35)
+#'
+#' listw <- spdep::nb2listw(COL.nb, style = "W")
+#'
+#' set.seed(857489)
+#' mod <- pmlsbp(
+#'   y ~ HOVAL + INC, data = dat, W = listw,
+#'   model = "SAR", grouping = 7,
+#'   na.action = na.omit, spectral = TRUE,
+#'   iterlim = 1e5
+#' )
+#' summary(mod)
+#' }
+#'
+#'
+#' @method summary pmlsprobit
 #' @export
 summary.pmlsprobit <- function(object, ... ) {
-  ## object      object of class "pmlsprobit"
-  ##
-  ## RESULTS:
-  ## list of class "summary.maxLik" with following components:
-  ## maximum    : function value at optimum
-  ## estimate   : estimated parameter values at optimum
-  ## gradient   :           gradient at optimum
-  ## code       : code of convergence
-  ## message    : message, description of the code
-  ## iterations : number of iterations
-  ## type       : type of optimisation
-  ##
   if(!inherits(object, "pmlsprobit"))
     stop("'summary.pmlsprobit' called on a non-'pmlsprobit' object")
   vcov <- object$vcov
@@ -492,18 +553,55 @@ summary.pmlsprobit <- function(object, ... ) {
   summary
 }
 
+#' Print method for summary.pmlsprobit objects
+#'
+#' S3 method to print objects of class \code{summary.pmlsprobit}.
+#'
+#' @param x An object of class \code{summary.pmlsprobit}.
+#' @param digits Number of significant digits to print for coefficients.
+#' @param ... Additional arguments (currently ignored).
+#'
+#' @return No return value
 #' @export
-print.summary.pmlsprobit <- function( x, digits = max( 3L, getOption("digits") - 3L ), ... ) {
-   cat("Partial Maximum Likelihood estimation\n")
-  cat(x$model," model\n")
-  cat("Partial Log-Likelihood=", x$loglik, "\n")
-  cat(x$returnMessage, "\n")
+#' @method print summary.pmlsprobit
+print.summary.pmlsprobit <- function(x, digits = max(3L, getOption("digits") - 3L), ...) {
+  stopifnot(inherits(x, "summary.pmlsprobit"))
+
+  cat("Partial Maximum Likelihood estimation\n")
+  cat(x$model, " model\n")
+  cat("Partial Log-Likelihood = ", x$loglik, "\n")
+
+  if (!is.null(x$returnMessage) && nzchar(x$returnMessage)) {
+    cat(x$returnMessage, "\n")
+  }
+
   cat("---\n")
-  printCoefmat( x$estimate, digits = digits )
+
+  if (!is.null(x$estimate)) {
+    printCoefmat(x$estimate, digits = digits, ...)
+  }
+
+  invisible(x)
 }
 
-#' @describeIn pmlsbp returns the variance covariance matrix of a \code{"pmlsprobit"} object
-#' @param object a \code{"pmlsprobit"} object
+#' Variance–Covariance Matrix for Partial Maximum Likelihood Spatial Probit Models
+#'
+#' @description
+#' Extracts the variance–covariance matrix from an object of class
+#' \code{"pmlsprobit"}.
+#'
+#' @param object An object of class \code{"pmlsprobit"}.
+#' @param ... Additional arguments (currently unused).
+#'
+#' @return
+#' A numeric matrix containing the variance–covariance matrix of the parameter
+#' estimates.
+#'
+#' @seealso
+#' Partial maximum likelihood estimation is implemented in
+#' \code{\link{pmlsbp}}.
+#'
+#' @method vcov pmlsprobit
 #' @export
 vcov.pmlsprobit <- function(object,...) {
   V<-object$vcov
@@ -511,8 +609,23 @@ vcov.pmlsprobit <- function(object,...) {
   V
 }
 
-#' @describeIn pmlsbp returns the coefficients estimate from a \code{"pmlsprobit"} object
-#' @param object a \code{"pmlsprobit"} object
+#' Coefficient Estimates for Partial Maximum Likelihood Spatial Probit Models
+#'
+#' @description
+#' Extracts the estimated regression coefficients from an object of class
+#' \code{"pmlsprobit"}.
+#'
+#' @param object An object of class \code{"pmlsprobit"}.
+#' @param ... Additional arguments (currently unused).
+#'
+#' @return
+#' A named numeric vector containing the coefficient estimates.
+#'
+#' @seealso
+#' Partial maximum likelihood estimation is implemented in
+#' \code{\link{pmlsbp}}.
+#'
+#' @method coef pmlsprobit
 #' @export
 coef.pmlsprobit <- function(object,...) {
   object$estimate
@@ -521,6 +634,7 @@ coef.pmlsprobit <- function(object,...) {
 #' @describeIn pmlsbp prints the call and the coefficient estimates of a \code{"pmlsprobit"} object
 #' @param x a \code{"pmlsprobit"} object
 #' @param digits integer, used for number formatting the decimal digits
+#' @return No return value
 #' @export
 print.pmlsprobit<-function(x, digits = max(3, getOption("digits") - 3), ...) {
   cat("\nCall:\n", paste(deparse(x$call), sep = "\n",

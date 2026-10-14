@@ -4,16 +4,40 @@ group_matrices <- function(y,X,grouping=2, M=25e3, sim_type="mc" ) {
   groups <- groups[order(groups)]
   groups <- as.integer(groups)
   groups <- list( y=groups )
+  groups $ X <- groups$X <- t(apply(matrix(groups$y),1, function(x) rep(x,ncol(X))))
+  groups $ Sigma <- (outer(groups$y, groups$y, "==")) * groups$y
+  table <- table(groups$y)
+  if (sim_type=="mc") {
+    rdm <- matrix(runif(M*(grouping-1)), nrow=M)
+  } else {
+    rdm <- matrix(qrng::ghalton(M,grouping-1,method =  "generalized"), nrow=M)
+  }
+  Rdm <- lapply(   seq_along(table),
+                   function(j) { t(rdm[, 1:(table[j]-1), drop = FALSE])     }   )
+  splitmat <- rep(as.integer(names(table)),table) #questa va replicata M volte
+  splitmat <- as.matrix(splitmat) #questa va replicata M volte (ogni riga)
+
+  groups$rdm <- Rdm
+  if (length(groups$rdm)!= max(groups$y))
+    length(groups$rdm) <- max(groups$y)
+  groups
+}
+group_matrices.v0 <- function(y,X,grouping=2, M=25e3, sim_type="mc" ) {
+  N <- length(y)
+  groups <- (1 + (1:N %%  (N/grouping)))
+  groups <- groups[order(groups)]
+  groups <- as.integer(groups)
+  groups <- list( y=groups )
   groups $ Sigma <- Matrix::bdiag(replicate(ceiling(N/grouping),matrix(1,grouping,grouping), simplify=F))[1:length(groups$y),1:length(groups$y)]
   groups $ Sigma <- as.matrix(diag(groups$y) %*%  groups$Sigma)
   groups $ X <- groups$X <- t(apply(matrix(groups$y),1, function(x) rep(x,ncol(X))))
   table <- table(groups$y)-1
-  if (sim_type=="mc") {
+    if (sim_type=="mc") {
     rdm <- runif(M*sum(table))
     rdm <- matrix(rdm, M)
   } else {
     rdm <- qrng::ghalton(M,sum(table),method =  "generalized")
-    }
+        }
   splitmat <- rep(as.integer(names(table)),table) #questa va replicata M volte
   splitmat <- as.matrix(splitmat) #questa va replicata M volte (ogni riga)
   rdm <- split(rdm, splitmat)
